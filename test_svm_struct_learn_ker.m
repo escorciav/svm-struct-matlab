@@ -30,12 +30,13 @@ function test_svm_struct_learn_ker
 
   parm.patterns = patterns ;
   parm.labels = labels ;
-  parm.lossFn = @lossCB
+  parm.lossFn = @lossCB;
   parm.constraintFn  =@constraintCB ;
   parm.kernelFn = @kernelCB ;
   parm.verbose = 1 ;
   model = svm_struct_learn(' -c 1.0 -o 1 -v 1 -t 4 ', parm) ;
-  w = cat(2, model.svPatterns{:}) * (model.alpha .* cat(1, model.svLabels{:})) / 2 ;
+  w = cat(2, model.svPatterns{:}) * ...
+      (model.alpha .* cat(1, model.svLabels{:})) / 2 ;
 
   % ------------------------------------------------------------------
   %                                                              Plots
@@ -54,6 +55,21 @@ function test_svm_struct_learn_ker
   axis equal ;
   set(gca, 'color', 'b') ;
   w
+  
+  % ------------------------------------------------------------------
+  %                                                    Run SVM struct
+  % ------------------------------------------------------------------
+
+  parm.patterns = patterns ;
+  parm.labels = labels ;
+  parm.lossFn = @lossCB;
+  parm.constraintFn  =@constraintCB_implicit ;
+  parm.kernelFn = @kernelCB ;
+  parm.verbose = 0 ;
+  model = svm_struct_learn(' -c 1.0 -o 1 -v 1 -t 4 ', parm) ;
+  w = cat(2, model.svPatterns{:}) * ...
+      (model.alpha .* cat(1, model.svLabels{:})) * 0.5;
+  
 end
 
 % --------------------------------------------------------------------
@@ -83,6 +99,31 @@ function yhat = constraintCB(param, model, x, y)
     w = [model.svPatterns{:}] * (model.alpha .* [model.svLabels{:}]') / 2 ;
   end
   if dot(y*x, w) > 1, yhat = y ; else yhat = -y ; end
+  if param.verbose
+    fprintf('yhat = violslack([%8.3f,%8.3f], [%8.3f,%8.3f], %3d) = %3d\n', ...
+            w, x, y, yhat) ;
+  end
+end
+
+function yhat = constraintCB_implicit(param, model, x, y)
+% Compute the augmented loss inference implicitly.
+% margin rescaling: argmax_y delta(yi, y) + <psi(x,y), w>
+  Y = [-1 1];
+  n = size(model.svPatterns, 2);
+  verbose = param.verbose;  param.verbose = 0;
+  if n == 0
+    yhat = -y;
+  else
+    inner_max = zeros(1,2);
+    for i = Y
+      k = cellfun(@kernelCB, cell(1,n), model.svPatterns, model.svLabels, ...
+                  repmat({x},1,n),repmat({i},1,n));
+      inner_max(0.5*i+1.5) = lossCB(param,y,i) + k * model.alpha;
+    end
+    [maxim idx] = max(inner_max);
+    yhat = Y(idx);
+  end
+  param.verbose = verbose;
   if param.verbose
     fprintf('yhat = violslack([%8.3f,%8.3f], [%8.3f,%8.3f], %3d) = %3d\n', ...
             w, x, y, yhat) ;
