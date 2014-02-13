@@ -34,7 +34,7 @@ function test_svm_struct_learn_ker
   parm.constraintFn  =@constraintCB ;
   parm.kernelFn = @kernelCB ;
   parm.verbose = 1 ;
-  model = svm_struct_learn(' -c 1.0 -o 1 -v 1 -t 4 ', parm) ;
+  model = svm_struct_learn(' -c 1.0 -o 1 -v 1 -t 4 -w 3', parm) ;
   w = cat(2, model.svPatterns{:}) * ...
       (model.alpha .* cat(1, model.svLabels{:})) / 2 ;
 
@@ -66,9 +66,9 @@ function test_svm_struct_learn_ker
   parm.constraintFn  =@constraintCB_implicit ;
   parm.kernelFn = @kernelCB ;
   parm.verbose = 0 ;
-  model = svm_struct_learn(' -c 1.0 -o 1 -v 1 -t 4 ', parm) ;
+  model = svm_struct_learn(' -c 1.0 -o 2 -v 1 -t 4 -w 3', parm) ;
   w = cat(2, model.svPatterns{:}) * ...
-      (model.alpha .* cat(1, model.svLabels{:})) * 0.5;
+      (model.alpha .* cat(1, model.svLabels{:})) / 2
   
 end
 
@@ -114,18 +114,18 @@ function yhat = constraintCB_implicit(param, model, x, y)
   if n == 0
     yhat = -y;
   else
-    inner_max = zeros(1,2);
+    augmented_loss = zeros(1,2);
     for i = Y
       k = cellfun(@kernelCB, cell(1,n), model.svPatterns, model.svLabels, ...
                   repmat({x},1,n),repmat({i},1,n));
-      inner_max(0.5*i+1.5) = lossCB(param,y,i) + k * model.alpha;
+      augmented_loss(0.5*i+1.5) = lossCB(param,y,i) + k * model.alpha;
     end
-    [maxim idx] = max(inner_max);
+    [maxim idx] = max(augmented_loss);
     yhat = Y(idx);
   end
   param.verbose = verbose;
   if param.verbose
-    fprintf('yhat = violslack([%8.3f,%8.3f], [%8.3f,%8.3f], %3d) = %3d\n', ...
-            w, x, y, yhat) ;
+    fprintf(['yhat = violmargin([-1: %8.3f, 1: %8.3f], [%8.3f,%8.3f], %3d)' ...
+      '= %3d\n'], augmented_loss, x, y, yhat) ;
   end
 end
